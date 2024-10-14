@@ -31,34 +31,35 @@ source(file.path(input_dir,"cQ_functions.R"))
 ################
 
 # Read in 30-min discharge data
-allInputData30Min <- read.csv(file.path(input_dir,"212058_Hourly.csv"))
+allInputData30Min <- read.csv(file.path(input_dir,"212042_Hourly.csv"))
 # Specify constituent in data set name
-dataSetName <- "212058_NTU"
+dataSetName <- "212042_NTU"
 
 # Chose constitution for plot axes labels (NO3, TOC, or turbidity)
 constit <- "turbidity"
 
 allInputData30Min$datetime <- as.POSIXct(allInputData30Min$datetime,format("%d/%m/%Y %H:%M"),tz="EST")
-select_year <- FALSE
-# Start and end date are used to select data for a given time period.
-# start_date <- as.POSIXct('2014-2-14 00:00:00')
-# end_date <- as.POSIXct('2014-9-30 00:00:00')
 # Trim the dataset
-# allInputData30Min <- allInputData30Min %>%
-#   filter(datetime >= start_date & datetime < end_date)
+# Start and end date are used to select data for a given time period.
+select_year <- TRUE
+start_date <- as.POSIXct('2020-1-01 00:00:00')
+end_date <- as.POSIXct('2020-12-31 00:00:00')
+year_sel <- "2020"
+allInputData30Min <- allInputData30Min %>%
+  filter(datetime >= start_date & datetime < end_date)
 
 allInputData30Min <- allInputData30Min %>% 
   mutate(rescaled_conc = ((conc-min(conc))/(max(conc)-min(conc))*max(q_cms)))
 
 
 # Vector containing candidate baseflow separation filter values
-# candidateFilterPara <- c(0.98,0.99)
-candidateFilterPara <- c(0.99)
+candidateFilterPara <- c(0.98,0.99)
+# candidateFilterPara <- c(0.99)
 
 
 # Vector containing candidate stormflow threshold values
-# candidateSfThresh <- c(0.1, 0.2, 0.5)
-candidateSfThresh <- c(0.2)
+candidateSfThresh <- c(0.1, 0.2, 0.5)
+# candidateSfThresh <- c(0.2)
 
 
 # Vector with interpolation intervals used for calculating HI
@@ -99,11 +100,11 @@ hysteresisData1 <- getHysteresisIndices(batchRun = batchRun1,
 # EXPORT OUTPUT DATA #
 ######################
 if(select_year) {
-  write.csv(eventsData1,file = file.path(output_dir,paste(dataSetName,"_Year_2014", "_StormEventSummaryData.csv",sep="")))
-  write.csv(batchRunFlowsLF1,file = file.path(output_dir,paste(dataSetName,"_Year_2014","_DischargeData.csv",sep="")))
-  write.csv(hysteresisData1,file = file.path(output_dir,paste(dataSetName,"_Year_2014","_HysteresisData.csv",sep="")))
-  write.csv(eventsDataAll1,file = file.path(output_dir,paste(dataSetName,"_Year_2014","_AllCQData.csv",sep="")))
-  write.csv(stormCounts1,file = file.path(output_dir,paste(dataSetName,"_Year_2014","_StormCounts.csv",sep="")))
+  write.csv(eventsData1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_StormEventSummaryData.csv",sep="")))
+  write.csv(batchRunFlowsLF1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_DischargeData.csv",sep="")))
+  write.csv(hysteresisData1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_HysteresisData.csv",sep="")))
+  write.csv(eventsDataAll1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_AllCQData.csv",sep="")))
+  write.csv(stormCounts1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_StormCounts.csv",sep="")))
 } else {
   write.csv(eventsData1,file = file.path(output_dir,paste(dataSetName,"_StormEventSummaryData.csv",sep="")))
   write.csv(batchRunFlowsLF1,file = file.path(output_dir,paste(dataSetName,"_DischargeData.csv",sep="")))
@@ -130,7 +131,7 @@ initialHydrograph <- ggplot(allInputData30Min,aes(x=datetime, y=q_cms)) +
                             theme_bw() +
                             theme(text=element_text(size=18))
 if (select_year){
-  figname <- paste(dataSetName, "_Year_2014", "_TotalDischarge.jpeg")
+  figname <- paste(dataSetName, "_Year_", year_sel, "_TotalDischarge.jpeg")
 }else{
   figname <- paste(dataSetName, "_TotalDischarge.jpeg")
 }
@@ -154,7 +155,7 @@ baseflowHydrograph <- ggplot() +
                             theme(legend.title = element_blank(),
                                   text=element_text(size=18))
 if (select_year){
-  figname <- paste(dataSetName, "_Year_2014", "_Baseflows.jpeg")
+  figname <- paste(dataSetName, "_Year_", year_sel, "_Baseflows.jpeg")
 }else{
   figname <- paste(dataSetName, "_Baseflows.jpeg")
 }
@@ -180,7 +181,7 @@ stormflowHydrograph <- ggplot() +
 
 # Set name of figs
 if (select_year){
-  figname <- paste(dataSetName, "_Year_2014", "_StormflowsOnly.jpeg")
+  figname <- paste(dataSetName, "_Year_", year_sel, "_StormflowsOnly.jpeg")
 }else{
   figname <- paste(dataSetName, "_StormflowsOnly.jpeg")
 }
@@ -206,7 +207,7 @@ stormflowThreshHydrograph <- ggplot() +
 
 # Set name of figs
 if (select_year){
-  figname <- paste(dataSetName, "_Year_2014", "_StormflowsOnlyWithThresholds.jpeg")
+  figname <- paste(dataSetName, "_Year_", year_sel, "_StormflowsOnlyWithThresholds.jpeg")
 }else{
   figname <- paste(dataSetName, "_StormflowsOnlyWithThresholds.jpeg")
 }
@@ -244,14 +245,14 @@ batchEventSepPlot <- ggplot() +
 
 # Set name of figs
 if (select_year){
-  figname <- paste(dataSetName, "_Year_2014", "_BatchEventSeparationPlot.jpeg")
+  figname <- paste(dataSetName, "_Year_", year_sel, "_BatchEventSeparationPlot.jpeg")
 }else{
   figname <- paste(dataSetName, "_BatchEventSeparationPlot.jpeg")
 }
 ggsave(file=file.path(output_dir,"Hydrographs",figname),
        batchEventSepPlot,
        width = 14, 
-       height = 4, 
+       height = 15, 
        units = "in",
        dpi=600)
 
