@@ -1,4 +1,3 @@
-
 # Main script to separate baseflow, delineate storm events, 
 # and run c-Q hysteresis index analyses
 
@@ -31,9 +30,10 @@ source(file.path(input_dir,"cQ_functions.R"))
 ################
 
 # Read in 30-min discharge data
-allInputData30Min <- read.csv(file.path(input_dir,"212042_Hourly.csv"))
+site = "212058"
+allInputData30Min <- read.csv(file.path(input_dir,paste(site, "_Hourly.csv", sep = "")))
 # Specify constituent in data set name
-dataSetName <- "212042_NTU"
+dataSetName <- paste(site, "_NTU", sep = "")
 
 # Chose constitution for plot axes labels (NO3, TOC, or turbidity)
 constit <- "turbidity"
@@ -41,29 +41,31 @@ constit <- "turbidity"
 allInputData30Min$datetime <- as.POSIXct(allInputData30Min$datetime,format("%d/%m/%Y %H:%M"),tz="EST")
 # Trim the dataset
 # Start and end date are used to select data for a given time period.
-select_year <- TRUE
-start_date <- as.POSIXct('2020-1-01 00:00:00')
-end_date <- as.POSIXct('2020-12-31 00:00:00')
-year_sel <- "2020"
-allInputData30Min <- allInputData30Min %>%
-  filter(datetime >= start_date & datetime < end_date)
+select_year <- FALSE
+if (select_year){
+  start_date <- as.POSIXct('2020-1-01 00:00:00')
+  end_date <- as.POSIXct('2020-12-31 00:00:00')
+  year_sel <- "2020"
+  allInputData30Min <- allInputData30Min %>%
+    filter(datetime >= start_date & datetime < end_date)
+}
 
 allInputData30Min <- allInputData30Min %>% 
   mutate(rescaled_conc = ((conc-min(conc))/(max(conc)-min(conc))*max(q_cms)))
 
 
 # Vector containing candidate baseflow separation filter values
-candidateFilterPara <- c(0.98,0.99)
-# candidateFilterPara <- c(0.99)
+# candidateFilterPara <- c(0.98)
+candidateFilterPara <- c(0.95)
 
 
 # Vector containing candidate stormflow threshold values
-candidateSfThresh <- c(0.1, 0.2, 0.5)
-# candidateSfThresh <- c(0.2)
+# candidateSfThresh <- c(0.1)
+candidateSfThresh <- c(0.2)
 
 
 # Vector with interpolation intervals used for calculating HI
-interp <- seq(0,1,0.01)
+interp <- seq(0, 1, 0.01)
 
 ##########################################
 # RUN ANALYSIS TO GET HYSTERESIS INDICES #
@@ -100,17 +102,17 @@ hysteresisData1 <- getHysteresisIndices(batchRun = batchRun1,
 # EXPORT OUTPUT DATA #
 ######################
 if(select_year) {
-  write.csv(eventsData1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_StormEventSummaryData.csv",sep="")))
-  write.csv(batchRunFlowsLF1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_DischargeData.csv",sep="")))
-  write.csv(hysteresisData1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_HysteresisData.csv",sep="")))
-  write.csv(eventsDataAll1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_AllCQData.csv",sep="")))
-  write.csv(stormCounts1,file = file.path(output_dir,paste(dataSetName,"_Year_", year_sel, "_StormCounts.csv",sep="")))
+  write.csv(eventsData1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_Year_", year_sel, "_StormEventSummaryData.csv",sep="")))
+  write.csv(batchRunFlowsLF1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_Year_", year_sel, "_DischargeData.csv",sep="")))
+  write.csv(hysteresisData1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_Year_", year_sel, "_HysteresisData.csv",sep="")))
+  write.csv(eventsDataAll1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_Year_", year_sel, "_AllCQData.csv",sep="")))
+  write.csv(stormCounts1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_Year_", year_sel, "_StormCounts.csv",sep="")))
 } else {
-  write.csv(eventsData1,file = file.path(output_dir,paste(dataSetName,"_StormEventSummaryData.csv",sep="")))
-  write.csv(batchRunFlowsLF1,file = file.path(output_dir,paste(dataSetName,"_DischargeData.csv",sep="")))
-  write.csv(hysteresisData1,file = file.path(output_dir,paste(dataSetName,"_HysteresisData.csv",sep="")))
-  write.csv(eventsDataAll1,file = file.path(output_dir,paste(dataSetName,"_AllCQData.csv",sep="")))
-  write.csv(stormCounts1,file = file.path(output_dir,paste(dataSetName,"_StormCounts.csv",sep="")))
+  write.csv(eventsData1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_StormEventSummaryData.csv",sep="")))
+  write.csv(batchRunFlowsLF1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_DischargeData.csv",sep="")))
+  write.csv(hysteresisData1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_HysteresisData.csv",sep="")))
+  write.csv(eventsDataAll1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_AllCQData.csv",sep="")))
+  write.csv(stormCounts1,file = file.path(paste(output_dir, site, sep = ""), paste(dataSetName,"_StormCounts.csv",sep="")))
 }
 
 
@@ -252,7 +254,7 @@ if (select_year){
 ggsave(file=file.path(output_dir,"Hydrographs",figname),
        batchEventSepPlot,
        width = 14, 
-       height = 15, 
+       height = 5, 
        units = "in",
        dpi=600)
 

@@ -5,27 +5,62 @@ from functions import EventDataComb, EventFilter
 
 # This is the main script used to process data.
 # TODO: Call R package for storm event split.
-
+data_freq = 'H'
+site = 212058
 # Re-filter events based on discharge threshold given.
-fn_storm_summary_212042 = '212042_NTU_StormEventSummaryData.csv'
-storm_info = pd.read_csv('../output/CQ_analysis/212042/' + fn_storm_summary_212042, index_col = 'Unnamed: 0')
-fn_data_212042 = '212042_Hourly.csv'
-data_212042 = pd.read_csv('../output/' + fn_data_212042, index_col = 'id')
+fn_storm_summary_212042 = f'{site}_NTU_StormEventSummaryData.csv'
+dir_output = f'../output/CQ_analysis/{site}/'
+storm_info = pd.read_csv(dir_output + fn_storm_summary_212042, index_col = 'id')
+if data_freq == 'H':
+    fn_data_212042 = f'{site}_Hourly.csv'
+    data_212042 = pd.read_csv('../output/' + fn_data_212042, index_col = 'id')
 
-# Convert data_212042['Datatime'] as datetime
-data_212042['Datetime'] = pd.to_datetime(data_212042['Datetime'], format = '%d/%m/%Y %H:%M')
-# Add " 00:00:00" to date without hour info for consistency. 
-storm_info.reset_index(inplace = True, drop=True)
-storm_info['start'] = [date + ' 00:00:00' if ' ' not in date else date for date in storm_info['start']]
-storm_info['start'] = pd.to_datetime(storm_info['start'], format = '%Y-%m-%d %H:%M:%S')
-storm_info['end'] = [date + ' 00:00:00' if ' ' not in date else date for date in storm_info['end']]
-storm_info['end'] = pd.to_datetime(storm_info['end'], format = '%Y-%m-%d %H:%M:%S')
+    # Convert data_212042['Datatime'] as datetime
+    data_212042['Datetime'] = pd.to_datetime(data_212042['Datetime'], format = '%d/%m/%Y %H:%M')
+    # Add " 00:00:00" to date without hour info for consistency. 
+    storm_info.reset_index(inplace = True, drop=True)
+    storm_info['start'] = [date + ' 00:00' if ' ' not in date else date for date in storm_info['start']]
+    storm_info['start'] = pd.to_datetime(storm_info['start'], format = 'mixed', dayfirst=True)
+    storm_info['end'] = [date + ' 00:00' if ' ' not in date else date for date in storm_info['end']]
+    storm_info['end'] = pd.to_datetime(storm_info['end'], format = 'mixed', dayfirst=True)
+    storm_info.index.name = 'id'
 
-# Re-filter events using data_212042 and storm_info
-event_info = EventFilter(data_212042, storm_info, 0.5, 'Discharge (cms)')
-storm_df = EventDataComb(data_212042, event_info)
-storm_df.index.name = 'id'
+    # Re-filter events using data_212042 and storm_info
+    Q_thred_filter = [0, 1, 2, 10, 20]
+    for Q_thr in Q_thred_filter:
+        event_info = EventFilter(data_212042, storm_info, Q_thr, 'Discharge (cms)', data_freq)
+    event_info.to_csv(dir_output + fn_storm_summary_212042)
 
-# Save files
-event_info.to_csv('../output/CQ_analysis/212042/' + fn_storm_summary_212042)
-storm_df.to_csv('../output/CQ_analysis/212042/' + '212042_StormEventRefilterData.csv')
+    # Save files
+    for Q_thr in Q_thred_filter:
+        storm_df = EventDataComb(data_212042, event_info, Q_thr, data_freq)
+        storm_df.index.name = 'id'
+        storm_df.to_csv(dir_output + 'Q_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
+elif data_freq == 'D':
+    fn_data_212042 = f'{site}_Daily.csv'
+    data_212042 = pd.read_csv('../output/' + fn_data_212042, index_col = 'id')
+
+    # Convert data_212042['Datatime'] as datetime
+    data_212042['Datetime'] = pd.to_datetime(data_212042['Datetime'], format = '%d/%m/%Y')
+    # Add " 00:00:00" to date without hour info for consistency. 
+    storm_info.reset_index(inplace = True, drop=True)
+    storm_info['start'] = [date + ' 00:00' if ' ' not in date else date for date in storm_info['start']]
+    storm_info['start'] = pd.to_datetime(storm_info['start'], format = 'mixed', dayfirst=True)
+    storm_info['end'] = [date + ' 00:00' if ' ' not in date else date for date in storm_info['end']]
+    storm_info['end'] = pd.to_datetime(storm_info['end'], format = 'mixed', dayfirst=True)
+    storm_info.index.name = 'id'
+
+    # Re-filter events using data_212058 and storm_info
+    Q_thred_filter = [0, 1, 2, 10, 20]
+    for Q_thr in Q_thred_filter:
+        event_info = EventFilter(data_212042, storm_info, Q_thr, 'Discharge (cms)', data_freq)
+    # Save event summary using daily data to process.
+    event_info.to_csv(dir_output + 'Daily' + fn_storm_summary_212042)
+
+    # Save files
+    for Q_thr in Q_thred_filter:
+        storm_df = EventDataComb(data_212042, event_info, Q_thr, data_freq)
+        storm_df.index.name = 'id'
+        storm_df.to_csv(dir_output + 'DailyQ_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
+else:
+    print('The frequency is not supported in this analysis.')
