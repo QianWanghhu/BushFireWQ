@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-from functions import EventDataComb, EventFilter
+from functions import EventDataComb, EventFilter, EventSmooth
 
 # This is the main script used to process data.
 # TODO: Call R package for storm event split.
@@ -26,14 +26,18 @@ if data_freq == 'H':
     storm_info.index.name = 'id'
 
     # Re-filter events using data_212042 and storm_info
-    Q_thred_filter = [0, 1, 2, 10, 20]
+    Q_thred_filter = [2]
     for Q_thr in Q_thred_filter:
         event_info = EventFilter(data_212042, storm_info, Q_thr, 'Discharge (cms)', data_freq)
     event_info.to_csv(dir_output + fn_storm_summary_212042)
 
+    # Combine events of time lag > 24 hours
+    event_comb = EventSmooth(event_info[event_info['Event_filter_2'] == 1]) # Dataframe with peak > 2 m3/s
+    event_comb.index.name = 'id'
+    event_comb.to_csv(dir_output + 'QAbove_' + str(Q_thr) + f'_{site}_StormEventClean.csv')
     # Save files
     for Q_thr in Q_thred_filter:
-        storm_df = EventDataComb(data_212042, event_info, Q_thr, data_freq)
+        storm_df = EventDataComb(data_212042, event_comb, Q_thr, data_freq)
         storm_df.index.name = 'id'
         storm_df.to_csv(dir_output + 'Q_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
 elif data_freq == 'D':
@@ -57,6 +61,9 @@ elif data_freq == 'D':
     # Save event summary using daily data to process.
     event_info.to_csv(dir_output + 'Daily' + fn_storm_summary_212042)
 
+    # Combine events of time lag > 24 hours
+    event_comb = EventSmooth(event_info[event_info['Event_filter_2'] == 1]) # Dataframe with peak > 2 m3/s
+    event_comb.to_csv(dir_output + 'QAbove_' + str(Q_thr) + f'_{site}_StormEventClean.csv')
     # Save files
     for Q_thr in Q_thred_filter:
         storm_df = EventDataComb(data_212042, event_info, Q_thr, data_freq)
@@ -64,3 +71,7 @@ elif data_freq == 'D':
         storm_df.to_csv(dir_output + 'DailyQ_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
 else:
     print('The frequency is not supported in this analysis.')
+
+# RUN CQmodel
+from CQmodel import CQFitPlot
+CQFitPlot()

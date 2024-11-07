@@ -42,12 +42,14 @@ allInputData30Min$datetime <- as.POSIXct(allInputData30Min$datetime,format("%d/%
 # Trim the dataset
 # Start and end date are used to select data for a given time period.
 select_year <- FALSE
+height_event <- 5
 if (select_year){
   start_date <- as.POSIXct('2020-1-01 00:00:00')
-  end_date <- as.POSIXct('2020-12-31 00:00:00')
+  end_date <- as.POSIXct('2021-12-31 00:00:00')
   year_sel <- "2020"
   allInputData30Min <- allInputData30Min %>%
     filter(datetime >= start_date & datetime < end_date)
+  height_event <- 15
 }
 
 allInputData30Min <- allInputData30Min %>% 
@@ -56,12 +58,12 @@ allInputData30Min <- allInputData30Min %>%
 
 # Vector containing candidate baseflow separation filter values
 # candidateFilterPara <- c(0.98)
-candidateFilterPara <- c(0.95)
+candidateFilterPara <- c(0.97)
 
 
 # Vector containing candidate stormflow threshold values
 # candidateSfThresh <- c(0.1)
-candidateSfThresh <- c(0.2)
+candidateSfThresh <- c(0.8)
 
 
 # Vector with interpolation intervals used for calculating HI
@@ -254,7 +256,7 @@ if (select_year){
 ggsave(file=file.path(output_dir,"Hydrographs",figname),
        batchEventSepPlot,
        width = 14, 
-       height = 5, 
+       height = height_event, 
        units = "in",
        dpi=600)
 
