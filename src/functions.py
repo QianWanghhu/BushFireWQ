@@ -4,10 +4,12 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.optimize as sci_opt
+from scipy.interpolate import interp1d
 
 # This file contains functions for data analysis
 def EventFilter(data, event_info, Qthresh, q_name, time_freq):
-    """Storm events are further filtered based on the flow peak. The original events are identified by R packages."""
+    """Storm events are further filtered based on the flow peak.
+    The original events are identified by R packages."""
     # Loop over events to get peak flow. 
     for ii in range(event_info.shape[0]):
         if time_freq == 'D':
@@ -25,8 +27,9 @@ def EventFilter(data, event_info, Qthresh, q_name, time_freq):
             event_info.loc[ii, 'q_peak'] = filtered_df[q_name].max()
         else:
             print('The temporal frequency is not supported.')
+        # Get rising and falling limb
     event_info[f'Event_filter_{Qthresh}'] = np.where(event_info['q_peak'] >= Qthresh, 1, 0)
-    return event_info  
+    return event_info
 
 def EventDataComb(data, event_info, baseflow, Qthresh, time_freq):
     """Function for Combine all C and Q data for given events. 
@@ -34,10 +37,9 @@ def EventDataComb(data, event_info, baseflow, Qthresh, time_freq):
         StormEventID as the third column.
     """
     storm_df = pd.DataFrame(data = None, columns = data.columns)
-    storm_df['stormID'] = None
-    storm_df['stormCount'] = None
-    storm_df['base_flow'] = None
-    storm_df['storm_flow'] = None
+    cols_new = ['stormID', 'stormCount', 'base_flow', 'storm_flow', 'total_flow']
+    storm_df[cols_new] = None
+    storm_limbs = {'risingLimbs': {}, 'fallingLimbs': {}}
     k_count = 0
     for ii in range(event_info.shape[0]):
         if event_info.loc[ii, f'Event_filter_{Qthresh}']:
@@ -53,13 +55,23 @@ def EventDataComb(data, event_info, baseflow, Qthresh, time_freq):
             filtered_df = data[(data['Datetime'] >= start_time) & (data['Datetime'] <= end_time)]
             filtered_df.loc[:, 'stormID'] = ii
             filtered_df.loc[:, 'stormCount'] = k_count
-            filtered_df.loc[:, 'base_flow':'storm_flow'] = \
-                baseflow[(baseflow['datetime'] >= start_time) & (baseflow['datetime'] <= end_time)]['base_flow':'storm_flow']
+            for col in cols_new[-3:]:
+                filtered_df[col] = \
+                    baseflow[(baseflow['datetime'] >= start_time) & (baseflow['datetime'] <= end_time)].loc[:, col].values
+                    
             storm_df = pd.concat([storm_df, filtered_df], axis=0)
-
-    return storm_df
+            filtered_df.loc[:, 'norm_tot_q'] = (filtered_df['total_flow'] - filtered_df['total_flow'].min()) / (filtered_df['total_flow'].max() - filtered_df['total_flow'].min())
+            filtered_df.loc[:, 'norm_c'] = (filtered_df['Turbidity (NTU)'] - filtered_df['Turbidity (NTU)'].min()) / (filtered_df['Turbidity (NTU)'].max() - filtered_df['Turbidity (NTU)'].min())
+            filtered_df.loc[:, 'norm_ts'] = (filtered_df['Datetime'] - filtered_df['Datetime'].min()) / (filtered_df['Datetime'].max() - filtered_df['Datetime'].min())
+            # Calculate normalized storm flows, rising and falling limbs, and norm conc and time.
+            storm_limbs = processStormEventsWithConc(filtered_df, storm_limbs)
+    return storm_df, storm_limbs
 
 def EventSmooth(event_info):
+    """
+    This function combines two or more event with time lag <= 24 hrs as one event.
+    The number of events largely reduces.
+    """
     # Sample data (replace this with your actual DataFrame)
     # Initialize a list to store combined events
     combined_events = []
@@ -79,7 +91,6 @@ def EventSmooth(event_info):
 
     # Don't forget to append the last event
     combined_events.append(current_event)
-
     # Convert the combined events back to a DataFrame
     combined_df = pd.DataFrame(combined_events)
     kk = 0
@@ -92,73 +103,69 @@ def EventSmooth(event_info):
     combined_df.reset_index(drop=True, inplace=True)
     return combined_df
 
-def processStormEventsWithConc(storm_df, event_info):
+def processStormEventsWithConc(storm_df, storm_limbs):
     """
     calculate rising, falling, norm_tot_q, norm_c, norm_ts
     """
-    for ii in range(event_info.shape[0]):
-        pass
-    pass
+    stormID = storm_df.loc[:, 'stormID'].unique()[0]
+    peak_date = storm_df.loc[storm_df['total_flow'].idxmax(), 'Datetime']
+    storm_limbs['risingLimbs'][stormID] = storm_df[storm_df['Datetime'] <= peak_date]
+    storm_limbs['fallingLimbs'][stormID] = storm_df[storm_df['Datetime'] > peak_date]
+    return storm_limbs
 
-def process_hysteresis():
-        # Create an empty DataFrame to store hysteresis data
-    hysteresis_data = pd.DataFrame(columns=['q_quant', 'risingerp', 'fallingerp', 'hyst_index', 'flsh_index', 'run_id', 'storm_id'])
-    
-    # Iterate over batchRun
-    for i, run in enumerate(batchRun):
-        if len(run['fullStorms']) > 0:
-            # Iterate over storms within each run
-            for j, storm in enumerate(run['fullStorms']):
-                # Sort out rising limb data
-                rising_limb_data = run['risingLimbs'][j]
-                q_norm_rising = rising_limb_data['norm_tot_q']
-                c_norm_rising = rising_limb_data['norm_c']
-                
-                # Sort out falling limb data
-                falling_limb_data = run['fallingLimbs'][j]
-                q_norm_falling = falling_limb_data['norm_tot_q']
-                c_norm_falling = falling_limb_data['norm_c']
-                
-                # Ensure there are at least 2 points to interpolate per event
-                len_rising = len(c_norm_rising)
-                len_falling = len(c_norm_falling)
-                
-                if (len_rising > 1 and len_falling > 1 and 
-                    len(np.unique(q_norm_rising)) > 1 and 
-                    len(np.unique(q_norm_falling)) > 1):
-                    
-                    # Perform interpolation
-                    interp_rising = interp1d(q_norm_rising, c_norm_rising, kind='linear', fill_value="extrapolate")
-                    interp_falling = interp1d(q_norm_falling, c_norm_falling, kind='linear', fill_value="extrapolate")
-                    
-                    # Interpolate at xForInterp
-                    rising_interp_vals = interp_rising(xForInterp)
-                    falling_interp_vals = interp_falling(xForInterp)
-                    
-                    # Combine data and calculate c-Q indices
-                    cQ_interp = pd.DataFrame({
-                        'q_quant': xForInterp,
-                        'risingerp': rising_interp_vals,
-                        'fallingerp': falling_interp_vals
-                    })
-                    
-                    # Calculate hysteresis index
-                    cQ_interp['hyst_index'] = cQ_interp['risingerp'] - cQ_interp['fallingerp']
-                    
-                    # Calculate flushing index
-                    flushing_index = run['risingLimbs'][j]['norm_c'][-1] - run['fullStorms'][j]['norm_c'][0]
-                    cQ_interp['flsh_index'] = flushing_index
-                    
-                    # Add run_id and storm_id
-                    cQ_interp['run_id'] = list(batchRun.keys())[i]  # Assuming 'batchRun' is a dict-like object
-                    cQ_interp['storm_id'] = f"storm_{j+1}"
-                    
-                    # Append to the hysteresis data
-                    hysteresis_data = pd.concat([hysteresis_data, cQ_interp], ignore_index=True)
-    
-    # Merge with eventsData based on run_id and storm_id
-    hysteresis_data = pd.merge(hysteresis_data, eventsData, on=['run_id', 'storm_id'], how='left')
-    
+def ProcessHysteresis(storm_df, storm_limbs):
+    # Create an empty DataFrame to store hysteresis data
+    hysteresis_data = pd.DataFrame(columns=['q_quant', 'risingerp', 'fallingerp', '\
+                                            hyst_index', 'flsh_index', 'run_id'])
+    # Iterate over storms within each run
+    for jj in storm_df.stormID.unique():
+        # Sort out rising limb data
+        rising_limb_data = storm_limbs['risingLimbs'][jj]
+        q_norm_rising = rising_limb_data['norm_tot_q']
+        c_norm_rising = rising_limb_data['norm_c']
+        
+        # Sort out falling limb data
+        falling_limb_data = storm_limbs['fallingLimbs'][jj]
+        q_norm_falling = falling_limb_data['norm_tot_q']
+        c_norm_falling = falling_limb_data['norm_c']  
+        # Ensure there are at least 2 points to interpolate per event
+        len_rising = len(c_norm_rising)
+        len_falling = len(c_norm_falling)
+        
+        if (len_rising > 1 and len_falling > 1 and 
+            len(np.unique(q_norm_rising)) > 1 and 
+            len(np.unique(q_norm_falling)) > 1):        
+            # Perform interpolation
+            interp_rising = interp1d(q_norm_rising, c_norm_rising, kind='linear',\
+                                      bounds_error=False, fill_value=np.nan)
+            interp_falling = interp1d(q_norm_falling, c_norm_falling, kind='linear', \
+                                      bounds_error=False, fill_value=np.nan)
+            xForInterp = np.arange(0, 1.01, 0.01)
+            # Interpolate at xForInterp
+            rising_interp_vals = interp_rising(xForInterp)
+            falling_interp_vals = interp_falling(xForInterp)
+            
+            # Combine data and calculate c-Q indices
+            cQ_interp = pd.DataFrame({
+                'q_quant': xForInterp,
+                'risingerp': rising_interp_vals,
+                'fallingerp': falling_interp_vals
+            })
+            
+            # Calculate hysteresis index
+            cQ_interp['hyst_index'] = cQ_interp['risingerp'] - cQ_interp['fallingerp']
+            
+            # Calculate flushing index
+            flushing_index = storm_limbs['risingLimbs'][jj]['norm_c'].values[-1] - \
+                storm_limbs['risingLimbs'][jj]['norm_c'].values[0]
+            cQ_interp['flsh_index'] = flushing_index
+            
+            # Add run_id and storm_id
+            cQ_interp['stormID'] = jj
+            
+            # Append to the hysteresis data
+            hysteresis_data = pd.concat([hysteresis_data, cQ_interp], ignore_index=True)    
+        hysteresis_data.index.name = 'id'
     return hysteresis_data
 
 class CQModel:

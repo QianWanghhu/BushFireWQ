@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-from functions import EventDataComb, EventFilter, EventSmooth
+from functions import EventDataComb, EventFilter, EventSmooth, ProcessHysteresis
 
 # This is the main script used to process data.
 # TODO: Call R package for storm event split.
@@ -13,8 +13,7 @@ dir_output = f'../output/CQ_analysis/{site}/'
 storm_info = pd.read_csv(dir_output + fn_storm_summary_212042, index_col = 'id')
 if data_freq == 'H':
     fn_data_212042 = f'{site}_Hourly.csv'
-    data_212042 = pd.read_csv('../output/' + fn_data_212042, index_col = 'id')
-
+    data_212042 = pd.read_csv('../output/' + fn_data_212042, index_col = 'id').dropna()
     # Convert data_212042['Datatime'] as datetime
     data_212042['Datetime'] = pd.to_datetime(data_212042['Datetime'], format = '%d/%m/%Y %H:%M')
     # Add " 00:00:00" to date without hour info for consistency. 
@@ -24,7 +23,6 @@ if data_freq == 'H':
     storm_info['end'] = [date + ' 00:00' if ' ' not in date else date for date in storm_info['end']]
     storm_info['end'] = pd.to_datetime(storm_info['end'], format = 'mixed', dayfirst=True)
     storm_info.index.name = 'id'
-
     # Re-filter events using data_212042 and storm_info
     Q_thred_filter = [2]
     for Q_thr in Q_thred_filter:
@@ -35,11 +33,16 @@ if data_freq == 'H':
     event_comb = EventSmooth(event_info[event_info['Event_filter_2'] == 1]) # Dataframe with peak > 2 m3/s
     event_comb.index.name = 'id'
     event_comb.to_csv(dir_output + 'QAbove_' + str(Q_thr) + f'_{site}_StormEventClean.csv')
+    # Read dataframe containing baseflow
+    baseflow = pd.read_csv(f'../output/CQ_analysis/{site}/' + f'{site}_NTU_DischargeData.csv', index_col = 'Unnamed: 0')
+    baseflow['datetime'] = pd.to_datetime(baseflow['datetime'], format = 'mixed', dayfirst=True)
     # Save files
     for Q_thr in Q_thred_filter:
-        storm_df = EventDataComb(data_212042, event_comb, Q_thr, data_freq)
+        storm_df, storm_limbs = EventDataComb(data_212042, event_comb, baseflow, Q_thr, data_freq)
         storm_df.index.name = 'id'
         storm_df.to_csv(dir_output + 'Q_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
+        hysteresis_data = ProcessHysteresis(storm_df, storm_limbs)
+    hysteresis_data.to_csv(f'../output/CQ_analysis/{site}/' + 'HysteresisEventClean.csv')
 elif data_freq == 'D':
     fn_data_212042 = f'{site}_Daily.csv'
     data_212042 = pd.read_csv('../output/' + fn_data_212042, index_col = 'id')
@@ -74,4 +77,4 @@ else:
 
 # RUN CQmodel
 from CQmodel import CQFitPlot
-CQFitPlot()
+# CQFitPlot()
