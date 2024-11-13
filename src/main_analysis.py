@@ -41,7 +41,7 @@ if data_freq == 'H':
         storm_df, storm_limbs = EventDataComb(data_212042, event_comb, baseflow, Q_thr, data_freq)
         storm_df.index.name = 'id'
         storm_df.to_csv(dir_output + 'Q_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
-        hysteresis_data = ProcessHysteresis(storm_df, storm_limbs)
+        hysteresis_data = ProcessHysteresis(event_comb, storm_limbs)
     hysteresis_data.to_csv(f'../output/CQ_analysis/{site}/' + 'HysteresisEventClean.csv')
 elif data_freq == 'D':
     fn_data_212042 = f'{site}_Daily.csv'

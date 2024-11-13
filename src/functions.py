@@ -4,7 +4,9 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 import scipy.optimize as sci_opt
+from scipy.optimize import minimize
 from scipy.interpolate import interp1d
+from spotpy.objectivefunctions import nashsutcliffe
 
 # This file contains functions for data analysis
 def EventFilter(data, event_info, Qthresh, q_name, time_freq):
@@ -58,12 +60,12 @@ def EventDataComb(data, event_info, baseflow, Qthresh, time_freq):
             for col in cols_new[-3:]:
                 filtered_df[col] = \
                     baseflow[(baseflow['datetime'] >= start_time) & (baseflow['datetime'] <= end_time)].loc[:, col].values
-                    
-            storm_df = pd.concat([storm_df, filtered_df], axis=0)
+            
             filtered_df.loc[:, 'norm_tot_q'] = (filtered_df['total_flow'] - filtered_df['total_flow'].min()) / (filtered_df['total_flow'].max() - filtered_df['total_flow'].min())
             filtered_df.loc[:, 'norm_c'] = (filtered_df['Turbidity (NTU)'] - filtered_df['Turbidity (NTU)'].min()) / (filtered_df['Turbidity (NTU)'].max() - filtered_df['Turbidity (NTU)'].min())
             filtered_df.loc[:, 'norm_ts'] = (filtered_df['Datetime'] - filtered_df['Datetime'].min()) / (filtered_df['Datetime'].max() - filtered_df['Datetime'].min())
             # Calculate normalized storm flows, rising and falling limbs, and norm conc and time.
+            storm_df = pd.concat([storm_df, filtered_df], axis=0)
             storm_limbs = processStormEventsWithConc(filtered_df, storm_limbs)
     return storm_df, storm_limbs
 
@@ -113,12 +115,12 @@ def processStormEventsWithConc(storm_df, storm_limbs):
     storm_limbs['fallingLimbs'][stormID] = storm_df[storm_df['Datetime'] > peak_date]
     return storm_limbs
 
-def ProcessHysteresis(storm_df, storm_limbs):
+def ProcessHysteresis(event_info, storm_limbs):
     # Create an empty DataFrame to store hysteresis data
-    hysteresis_data = pd.DataFrame(columns=['q_quant', 'risingerp', 'fallingerp', '\
-                                            hyst_index', 'flsh_index', 'run_id'])
+    hysteresis_data = pd.DataFrame(columns=['q_quant', 'risingerp', 'fallingerp', 
+                                            'hyst_index', 'flsh_index'])
     # Iterate over storms within each run
-    for jj in storm_df.stormID.unique():
+    for jj in event_info.stormID.unique():
         # Sort out rising limb data
         rising_limb_data = storm_limbs['risingLimbs'][jj]
         q_norm_rising = rising_limb_data['norm_tot_q']
@@ -154,15 +156,15 @@ def ProcessHysteresis(storm_df, storm_limbs):
             
             # Calculate hysteresis index
             cQ_interp['hyst_index'] = cQ_interp['risingerp'] - cQ_interp['fallingerp']
-            
             # Calculate flushing index
             flushing_index = storm_limbs['risingLimbs'][jj]['norm_c'].values[-1] - \
                 storm_limbs['risingLimbs'][jj]['norm_c'].values[0]
             cQ_interp['flsh_index'] = flushing_index
-            
             # Add run_id and storm_id
             cQ_interp['stormID'] = jj
-            
+            cQ_interp['start'] = event_info.loc[jj, 'start']
+            cQ_interp['end'] = event_info.loc[jj, 'end']
+            cQ_interp['q_peak'] = event_info.loc[jj, 'q_peak']
             # Append to the hysteresis data
             hysteresis_data = pd.concat([hysteresis_data, cQ_interp], ignore_index=True)    
         hysteresis_data.index.name = 'id'
@@ -171,28 +173,70 @@ def ProcessHysteresis(storm_df, storm_limbs):
 class CQModel:
     # Fit a C-Q model in power-law relationship
     # Step 1: Define a power-law function
-    def __init__(self):
-        pass
+    def __init__(self, mod_type, initial_params = None):
+        """
+        mod_type is power_law or
+        """
+        self.mod_type = mod_type
+        self.initial_params = initial_params
 
-    def func(self, x, a, b):
+    def func(self, x, a=None, b=None):
         """
         Define the function type.
+        x: flow data
+        a, b: two coefficients for power-law model. When using mixed model, a is a list of parameter.
+            Mixed model has five coefficients: aq, bq, ab, bb, n
         """
-        return a * np.power(x, b)
+        if self.mod_type == 'power_law':
+            # a, b = coeff
+            return a * np.power(x, b)
+        elif self.mod_type == 'mixed':
+            return self.mix_model(x, a)
+        else:
+            print('not supported function type.')
+            
 
     # Step 2: Curve-fit to obtain parameter values
     def fit(self, flow, conc):
         """
         Fit the function using given flow and concentration observations.
         """
-        popt, pcov = sci_opt.curve_fit(self.func, xdata = flow, ydata = conc)
-        return popt, pcov
-    
-    def evaluate(self, flow, popt):
+        if self.mod_type == 'power_law':
+            # assert flow.shape[1] == 1, 'Flow should be one column for power law fit.'
+            popt, pcov = sci_opt.curve_fit(self.func, xdata = flow, ydata = conc)
+            return popt, pcov
+        elif self.mod_type == 'mixed':
+            bnds = ((None, None), (None, None), (None, None), (None, None))
+            result = minimize(self.objective_function, self.initial_params, \
+                              args=(flow, conc), method='SLSQP', bounds=bnds)
+            return result
+
+    def objective_function(self, coeff, x, y_obs):
+        y_pred = self.func(x, coeff)
+        return 1 - nashsutcliffe(y_obs, y_pred)
+
+    def mix_model(self, flow, coeff, n=4):
+        """
+        flow: of shape (1, 3) with the first column as total flow, the second as quick and the last as base.
+        coeff: {'aq', 'bq', 'ab', 'bb'}
+        n: the fixed value for calibrating coeff. The default value is 10.
+        """
+        aq, bq, ab, bb = coeff
+        q_total, q_quick, q_base = flow[:, 0], flow[:, 1], flow[:, 2]
+        assert flow.shape[1] == 3, 'Flow should contain total storm flow, base, and quick flow.'   
+        c_quick = np.power((aq + bq * (q_total ** 1/n)), n) * q_quick / q_total
+        c_base = np.power((ab + bb * (q_total**1/n)), n) * q_base / q_total
+        conc = c_quick + c_base
+        return conc
+
+    def evaluate(self, flow, coeff):
         """
         Calculate estimated concentrations using the fitted function.
         """
-        estimate_conc = self.func(flow, *popt)
+        if self.mod_type == 'power_law':
+            estimate_conc = self.func(flow, *coeff)
+        elif self.mod_type == 'mixed':
+            estimate_conc = self.mix_model(flow, coeff)
         return estimate_conc
 
 # Create scatter plot
