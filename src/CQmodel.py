@@ -13,8 +13,8 @@ def CQFitPlot(mod_type, train_period):
     site = 212058
     Q_thre = 1
     date_postfire = pd.to_datetime('2020-01-17')
-    date_postyear = pd.to_datetime('2021-12-30')
-    date_preyear = pd.to_datetime('2017-01-01')
+    date_postyear = pd.to_datetime('2021-06-30')
+    date_preyear = pd.to_datetime('2015-01-01')
     fig_dir = f'../output/figs/{site}/'
     storm_data = pd.read_csv(f'../output/CQ_analysis/{site}/' + \
                                 f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv', index_col = 'id')
