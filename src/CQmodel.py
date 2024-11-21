@@ -102,6 +102,7 @@ def CQFitPlot(mod_type, train_period):
     axes[0, 0].legend(fontsize = lab_fs)
     axes[0, 0].tick_params(axis='both', which = 'major', labelsize = tick_fs)
     axes[0, 0].set_ylabel('Turbidity (NTU)', fontsize = lab_fs)
+    axes[1, 0].set_ylabel('Turbidity (NTU)', fontsize = lab_fs)
     axes[0, 0].set_xlabel('Flow (cms)', fontsize = lab_fs)
 
     date_nums_post = storm_data_post.Datetime.astype(np.int64) / 1e9
@@ -131,9 +132,9 @@ def CQFitPlot(mod_type, train_period):
 
     # Plot the residuals
     # Plot 2: Scatter plot of turbidity
-    pre_res = storm_data_pre['Estimate_Turbidity'].values - pre_obs_conc
-    post_res = storm_data_post['Estimate_Turbidity'].values - post_obs_conc
-    fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True, sharex=True, figsize=(12, 5))
+    pre_res = pre_obs_conc - storm_data_pre['Estimate_Turbidity'].values
+    post_res = post_obs_conc - storm_data_post['Estimate_Turbidity'].values 
+    fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True, sharex=True, figsize=(6, 3))
     if mod_type == 'power_law':
         axes[0].scatter(pre_obs_flow[:], pre_res, s = 2, color = 'blue', label = 'Prefire')  
     else:
@@ -152,8 +153,9 @@ def CQFitPlot(mod_type, train_period):
     axes[1].set_xlabel('Flow (cms)', fontsize = lab_fs)
     axes[1].tick_params(axis='both', which = 'major', labelsize = tick_fs)
     # plt.yscale('log')
-    plt.title('Model - Observation', fontsize = lab_fs)
+    plt.suptitle('Observation - Model', fontsize = lab_fs, y=0.95)
     plt.xscale('log')
+    plt.tight_layout()
     plt.savefig(f'{fig_dir}{mod_type}{train_period}calResidualCQFitPrePostfire.png', format='png', dpi=300)
 
     fig = plt.figure(figsize=(8, 5))
