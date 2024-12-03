@@ -1,0 +1,4 @@
+1. Step 1: Run R code to delineate storm events
+2. Step 2: Run main_analysis.py to process event data by filtering out small events and combine two events as one if the time diff 	<1 day.
+3. Step 3: Run CQmodel to fit CQ model.
+4. Step 4: Run Explore_212058_CQ.ipynb to produce plots.
