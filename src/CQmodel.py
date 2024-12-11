@@ -79,6 +79,7 @@ def CQFitPlot(mod_type, train_period):
     log_nse['Prefire'] = np.round(lognashsutcliffe(storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Turbidity (NTU)'], \
                                             storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Estimate_Turbidity']), 3)
     log_nse['Postfire'] = np.round(lognashsutcliffe(storm_data_post['Turbidity (NTU)'], storm_data_post['Estimate_Turbidity']), 3)
+    breakpoint()
     # Set fontsize used in plots
     lab_fs = 14
     tick_fs = 14
