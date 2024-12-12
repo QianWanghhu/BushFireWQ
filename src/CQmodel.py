@@ -14,7 +14,7 @@ def CQFitPlot(mod_type, train_period):
     Q_thre = 1
     start_postyear = pd.to_datetime('2020-01-17')
     end_postyear = pd.to_datetime('2021-06-30')
-    start_preyear = pd.to_datetime('2015-07-01')
+    start_preyear = pd.to_datetime('2016-07-01')
     fig_dir = f'../output/figs/{site}/'
     storm_data = pd.read_csv(f'../output/CQ_analysis/{site}/' + \
                                 f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv', index_col = 'id')
@@ -79,7 +79,6 @@ def CQFitPlot(mod_type, train_period):
     log_nse['Prefire'] = np.round(lognashsutcliffe(storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Turbidity (NTU)'], \
                                             storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Estimate_Turbidity']), 3)
     log_nse['Postfire'] = np.round(lognashsutcliffe(storm_data_post['Turbidity (NTU)'], storm_data_post['Estimate_Turbidity']), 3)
-    breakpoint()
     # Set fontsize used in plots
     lab_fs = 14
     tick_fs = 14
