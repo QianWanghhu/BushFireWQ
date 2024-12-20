@@ -6,7 +6,7 @@ import seaborn as sns
 import scipy.optimize as sci_opt
 from scipy.optimize import minimize
 from scipy.interpolate import interp1d
-from spotpy.objectivefunctions import nashsutcliffe
+from spotpy.objectivefunctions import nashsutcliffe, rrmse, rmse, lognashsutcliffe
 
 # This file contains functions for data analysis
 def EventFilter(data, event_info, Qthresh, q_name, time_freq):
@@ -180,53 +180,66 @@ class CQModel:
         self.mod_type = mod_type
         self.initial_params = initial_params
 
-    def func(self, x, a=None, b=None):
+    def power_law(self, x, a, b):
         """
         Define the function type.
         x: flow data
         a, b: two coefficients for power-law model. When using mixed model, a is a list of parameter.
             Mixed model has five coefficients: aq, bq, ab, bb, n
         """
-        if self.mod_type == 'power_law':
-            # a, b = coeff
-            return a * np.power(x, b)
-        elif self.mod_type == 'mixed':
-            return self.mix_model(x, a)
-        else:
-            print('not supported function type.')
+        return a * np.power(x, b)
             
-
     # Step 2: Curve-fit to obtain parameter values
     def fit(self, flow, conc):
         """
         Fit the function using given flow and concentration observations.
         """
         if self.mod_type == 'power_law':
-            # assert flow.shape[1] == 1, 'Flow should be one column for power law fit.'
-            popt, pcov = sci_opt.curve_fit(self.func, xdata = flow, ydata = conc)
+            # assert flow.shape[1] == 1, 'Flow should be one column for power law fit.
+            popt, pcov = sci_opt.curve_fit(self.power_law, xdata = flow, ydata = conc)
             return popt, pcov
         elif self.mod_type == 'mixed':
-            bnds = ((None, None), (None, None), (None, None), (None, None))
-            result = minimize(self.objective_function, self.initial_params, \
-                              args=(flow, conc), method='SLSQP', bounds=bnds)
+            bnds = np.array([[None, None, None, None], [None, None, None, None]])
+            # result = minimize(self.objective_function, self.initial_params, \
+            #                   args=(flow, conc, rrmse), method='BFGS', bounds=bnds, tol=1e-4)
+            # Initial guesses for parameters [aq, bq, ab, bb, n]
+            
+            # Use sci_opt.curve_fit for optimizing parameters
+            initial_guess = [1, 1, 0, 0]
+            # Use curve_fit with multiple predictors
+            popt, pcov = sci_opt.curve_fit(self.mix_model, xdata = flow.T, ydata = conc, 
+                                           p0=initial_guess)
+
+            # Extract optimized parameters and standard deviations
+            parameter_std_devs = np.sqrt(np.diag(pcov))  # Standard deviations of parameters
+            result = {}
+            result['x'] = popt
+            result['std'] = parameter_std_devs
+
             return result
 
-    def objective_function(self, coeff, x, y_obs):
-        y_pred = self.func(x, coeff)
-        return 1 - nashsutcliffe(y_obs, y_pred)
+    def objective_function(self, aq, bq, ab, bb, x, y_obs, obj):
+        """
+        obj: nashsutcliffe, rrmse.
+        """
+        y_pred = self.mix_model(x, aq, bq, ab, bb)
+        if obj == nashsutcliffe:
+            return 1 - obj(y_obs, y_pred)
+        else:
+            return obj(y_obs, y_pred)
 
-    def mix_model(self, flow, coeff, n=4):
+    def mix_model(self, flow, aq, bq, ab, bb, n=4):
         """
         flow: of shape (1, 3) with the first column as total flow, the second as quick and the last as base.
         coeff: {'aq', 'bq', 'ab', 'bb'}
         n: the fixed value for calibrating coeff. The default value is 10.
         """
-        aq, bq, ab, bb = coeff
-        q_total, q_quick, q_base = flow[:, 0], flow[:, 1], flow[:, 2]
-        assert flow.shape[1] == 3, 'Flow should contain total storm flow, base, and quick flow.'   
-        c_quick = np.power((aq + bq * (q_total ** 1/n)), n) * q_quick / q_total
-        c_base = np.power((ab + bb * (q_total**1/n)), n) * q_base / q_total
-        conc = c_quick + c_base
+        # aq, bq, ab, bb = coeff
+        q_total, q_quick, q_base = flow[0, :], flow[1, :], flow[2, :]
+        assert flow.shape[0] == 3, 'Flow should contain total storm flow, base, and quick flow.'   
+        c_quick = np.power((aq + bq * (q_total ** 1/n)), n) * q_total / q_total
+        # c_base = np.power((ab + bb * (q_total**1/n)), n) * q_base / q_total
+        conc = c_quick
         return conc
 
     def evaluate(self, flow, coeff):
@@ -234,9 +247,9 @@ class CQModel:
         Calculate estimated concentrations using the fitted function.
         """
         if self.mod_type == 'power_law':
-            estimate_conc = self.func(flow, *coeff)
+            estimate_conc = self.power_law(flow, *coeff)
         elif self.mod_type == 'mixed':
-            estimate_conc = self.mix_model(flow, coeff)
+            estimate_conc = self.mix_model(flow.T, *coeff)
         return estimate_conc
 
 # Create scatter plot

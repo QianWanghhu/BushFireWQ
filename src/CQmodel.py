@@ -9,16 +9,15 @@ import matplotlib.cm as cm
 from spotpy.objectivefunctions import nashsutcliffe, lognashsutcliffe
 
 # Step 1: Read dataset and Process data
-def CQFitPlot(mod_type, train_period):
+def CQFitPlot(mod_type, train_period, fig_dir):
     site = 212058
     Q_thre = 1
-    start_postyear = pd.to_datetime('2020-01-17')
-    end_postyear = pd.to_datetime('2021-06-30')
+    start_postyear = pd.to_datetime('2020-01-01')
+    end_postyear = pd.to_datetime('2021-07-01')
     start_preyear = pd.to_datetime('2016-07-01')
-    fig_dir = f'../output/figs/{site}/'
     storm_data = pd.read_csv(f'../output/CQ_analysis/{site}/' + \
-                                f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv', index_col = 'id')
-    storm_data['Datetime'] = pd.to_datetime(storm_data['Datetime'])
+                                'Q_above_1_212058_StormEventRefilterData.csv', index_col='id')#'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv'
+    storm_data['Datetime'] = pd.to_datetime(storm_data['Datetime'], format='mixed', dayfirst=True)
     if train_period == 'Full': # If using the full dataset for training CQ model, set the end date as end_postfire.
         pre_time_tf = (storm_data['Datetime'] <= end_postyear) & (storm_data['Datetime'] >= start_preyear)
     else: # If using the prefire dataset for training CQ model, set the end date as start_postyear.
@@ -39,7 +38,7 @@ def CQFitPlot(mod_type, train_period):
     if mod_type =='power_law':
         pre_obs_flow = storm_data_pre.loc[:, cols[0]].values
         post_obs_flow = storm_data_post.loc[:, cols[0]].values
-        result_fit, pcov = CQM.fit(pre_obs_flow, pre_obs_conc)
+        result_fit, _ = CQM.fit(pre_obs_flow, pre_obs_conc)
         # Estimate NTU using fitted CQ model.
         # Plot 1: Time series
         storm_data_pre['Estimate_Turbidity'] = CQM.evaluate(pre_obs_flow, result_fit)
@@ -63,27 +62,28 @@ def CQFitPlot(mod_type, train_period):
             result_fit = CQM.fit(post_obs_flow, post_obs_conc)
         else:
             result_fit = CQM.fit(pre_obs_flow, pre_obs_conc)
+        # Check if the optimization was successful
+        # if result_fit.success:
+        #     print("Optimization failed:", result_fit.message)
+
         # Estimate NTU using fitted CQ model.
-        storm_data_pre['Estimate_Turbidity'] = CQM.evaluate(pre_obs_flow, result_fit.x)
-        storm_data_post['Estimate_Turbidity'] = CQM.evaluate(post_obs_flow, result_fit.x)
+        storm_data_pre['Estimate_Turbidity'] = CQM.evaluate(pre_obs_flow, result_fit['x'])
+        storm_data_post['Estimate_Turbidity'] = CQM.evaluate(post_obs_flow, result_fit['x'])
         storm_data.loc[storm_data[pre_time_tf].index, f'Est_Tbdt_mix_{train_period}cal'] = \
             storm_data_pre['Estimate_Turbidity'].values
         storm_data.loc[storm_data[post_time_tf].index, f'Est_Tbdt_mix_{train_period}cal'] = \
             storm_data_post['Estimate_Turbidity'].values
     storm_data.to_csv(f'../output/CQ_analysis/{site}/' + \
-                        f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv')
+                        'Q_above_1_212058_StormEventRefilterData.csv')
     # Calculate R2
     nse['Prefire'] = np.round(nashsutcliffe(storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Turbidity (NTU)'], \
                                             storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Estimate_Turbidity']), 3)
     nse['Postfire'] = np.round(nashsutcliffe(storm_data_post['Turbidity (NTU)'], storm_data_post['Estimate_Turbidity']), 3)
-    log_nse['Prefire'] = np.round(lognashsutcliffe(storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Turbidity (NTU)'], \
-                                            storm_data_pre[storm_data_pre['Datetime']< start_postyear]['Estimate_Turbidity']), 3)
-    log_nse['Postfire'] = np.round(lognashsutcliffe(storm_data_post['Turbidity (NTU)'], storm_data_post['Estimate_Turbidity']), 3)
     # Set fontsize used in plots
     lab_fs = 14
     tick_fs = 14
     # Plot 2: Scatter plot of turbidity
-    fig, axes = plt.subplots(nrows=2, ncols=2, sharey=True, sharex=True, figsize=(9, 6))
+    _, axes = plt.subplots(nrows=2, ncols=2, sharey=True, sharex=True, figsize=(9, 6))
     # Using gradient colors for data one year before fire
     date_nums = storm_data_pre.Datetime.astype(np.int64) / 1e9
     norm = plt.Normalize(date_nums.min(), date_nums.max())
@@ -91,7 +91,7 @@ def CQFitPlot(mod_type, train_period):
     if mod_type == 'power_law':
         scatter_pre = axes[0, 0].scatter(storm_data_pre[cols[0]], storm_data_pre[cols[1]], s = 2, color = colors, label = 'Prefire')
         axes[0, 1].scatter(pre_obs_flow[:], storm_data_pre['Estimate_Turbidity'].values, s = 2,
-                color = 'orange', alpha = 0.8) #        
+                color = 'orange', alpha = 0.8)       
     else:
         scatter_pre = axes[0, 0].scatter(pre_obs_flow[:, 0], pre_obs_conc, s = 2, color = colors, label = 'Prefire')
         axes[0, 1].scatter(pre_obs_flow[:, 0], storm_data_pre['Estimate_Turbidity'].values, s = 2,
@@ -138,8 +138,9 @@ def CQFitPlot(mod_type, train_period):
 
     # Plot the residuals
     # Plot 2: Scatter plot of turbidity
-    pre_res = pre_obs_conc - storm_data_pre['Estimate_Turbidity'].values
-    post_res = post_obs_conc - storm_data_post['Estimate_Turbidity'].values 
+    # Calculate the ratio of mod / obs
+    pre_res = storm_data_pre['Estimate_Turbidity'].values / pre_obs_conc
+    post_res = storm_data_post['Estimate_Turbidity'].values / post_obs_conc
     fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True, sharex=True, figsize=(6, 3))
     if mod_type == 'power_law':
         axes[0].scatter(pre_obs_flow[:], pre_res, s = 2, color = 'blue', label = 'Prefire')  
@@ -158,11 +159,11 @@ def CQFitPlot(mod_type, train_period):
     axes[1].legend(fontsize = lab_fs)
     axes[1].set_xlabel('Flow (cms)', fontsize = lab_fs)
     axes[1].tick_params(axis='both', which = 'major', labelsize = tick_fs)
-    # plt.yscale('log')
-    plt.suptitle('Observation - Model', fontsize = lab_fs, y=0.95)
+    plt.yscale('log')
+    plt.suptitle('Model / Observation', fontsize = lab_fs, y=0.95)
     plt.xscale('log')
     plt.tight_layout()
-    plt.savefig(f'{fig_dir}{mod_type}{train_period}calResidualCQFitPrePostfire.png', format='png', dpi=300)
+    plt.savefig(f'{fig_dir}{mod_type}{train_period}calResidualCQFit.png', format='png', dpi=300)
 
     fig = plt.figure(figsize=(8, 5))
     data_temp = [pre_obs_conc, post_obs_conc] #
@@ -174,20 +175,22 @@ def CQFitPlot(mod_type, train_period):
     return {'result_fit':result_fit, 'nse': nse, 'lognse':log_nse}
 
 if __name__ == '__main__':
+    site = 212058
+    fig_dir = f'../output/figs/{site}/CQ_LM/'
     mod_types = ['power_law', 'mixed']
     train_periods = ['Pre', 'Post', 'Full']
     # Define the index for coeff with the first being CQ model coefficients and the remaining for NSE and log NSE
-    keys = ['aq', 'bq', 'ab', 'bb', 'nse_pre', 'nse_post', 'lognse_pre', 'lognse_post']
+    keys = ['aq', 'bq', 'ab', 'bb', 'aq_std', 'bq_std', 'ab_std', 'bb_std', 'nse_pre', 'nse_post']
     coeff = pd.DataFrame(index=keys, columns=train_periods)
-    _ = CQFitPlot(mod_types[0], train_periods[0])
-    temp = CQFitPlot(mod_types[1], train_periods[0])
-    temp2 = CQFitPlot(mod_types[1], train_periods[1])
-    temp3 = CQFitPlot(mod_types[1], train_periods[2])
+    _ = CQFitPlot(mod_types[0], train_periods[0], fig_dir)
+    temp = CQFitPlot(mod_types[1], train_periods[0], fig_dir)
+    temp2 = CQFitPlot(mod_types[1], train_periods[1], fig_dir)
+    temp3 = CQFitPlot(mod_types[1], train_periods[2], fig_dir)
     for idx, res in enumerate([temp, temp2, temp3]):
-        coeff.loc[keys[0:4], train_periods[idx]] = res['result_fit'].x
-        coeff.loc[keys[4], train_periods[idx]] = res['nse']['Prefire']
-        coeff.loc[keys[5], train_periods[idx]] = res['nse']['Postfire']
-        coeff.loc[keys[6], train_periods[idx]] = res['lognse']['Prefire']
-        coeff.loc[keys[7], train_periods[idx]] = res['lognse']['Postfire']
+        std_devs = np.sqrt(np.diag(res['result_fit']['std']))
+        coeff.loc[keys[0:4], train_periods[idx]] = res['result_fit']['x']
+        coeff.loc[keys[4:8], train_periods[idx]] = np.diagonal(std_devs)
+        coeff.loc[keys[8], train_periods[idx]] = res['nse']['Prefire']
+        coeff.loc[keys[9], train_periods[idx]] = res['nse']['Postfire']
     coeff = coeff.astype(float)
-    coeff.to_csv('../output/CQ_analysis/212058/CQModelCoeff.csv')
+    coeff.to_csv(f'{fig_dir}CQModelCoeff_LM.csv')
