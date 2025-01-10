@@ -199,13 +199,13 @@ class CQModel:
             popt, pcov = sci_opt.curve_fit(self.power_law, xdata = flow, ydata = conc)
             return popt, pcov
         elif self.mod_type == 'mixed':
-            bnds = np.array([[None, None, None, None], [None, None, None, None]])
+            bnds = np.array([None, None])
             # result = minimize(self.objective_function, self.initial_params, \
             #                   args=(flow, conc, rrmse), method='BFGS', bounds=bnds, tol=1e-4)
             # Initial guesses for parameters [aq, bq, ab, bb, n]
             
             # Use sci_opt.curve_fit for optimizing parameters
-            initial_guess = [1, 1, 0, 0]
+            initial_guess = [1, 1]
             # Use curve_fit with multiple predictors
             popt, pcov = sci_opt.curve_fit(self.mix_model, xdata = flow.T, ydata = conc, 
                                            p0=initial_guess)
@@ -218,17 +218,17 @@ class CQModel:
 
             return result
 
-    def objective_function(self, aq, bq, ab, bb, x, y_obs, obj):
+    def objective_function(self, aq, bq, x, y_obs, obj):
         """
         obj: nashsutcliffe, rrmse.
         """
-        y_pred = self.mix_model(x, aq, bq, ab, bb)
+        y_pred = self.mix_model(x, aq, bq)
         if obj == nashsutcliffe:
             return 1 - obj(y_obs, y_pred)
         else:
             return obj(y_obs, y_pred)
 
-    def mix_model(self, flow, aq, bq, ab, bb, n=4):
+    def mix_model(self, flow, aq, bq, n=4):
         """
         flow: of shape (1, 3) with the first column as total flow, the second as quick and the last as base.
         coeff: {'aq', 'bq', 'ab', 'bb'}
@@ -238,7 +238,7 @@ class CQModel:
         q_total, q_quick, q_base = flow[0, :], flow[1, :], flow[2, :]
         assert flow.shape[0] == 3, 'Flow should contain total storm flow, base, and quick flow.'   
         c_quick = np.power((aq + bq * (q_total ** 1/n)), n) * q_total / q_total
-        # c_base = np.power((ab + bb * (q_total**1/n)), n) * q_base / q_total
+        # c_base = np.power((ab + bb * (q_total**1/n)), n) * q_total / q_total
         conc = c_quick
         return conc
 
