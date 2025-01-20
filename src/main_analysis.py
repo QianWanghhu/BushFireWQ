@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-from functions import EventDataComb, EventFilter, EventSmooth, ProcessHysteresis
+from functions import EventDataComb, EventFilter, EventSmooth, ProcessHysteresis, cal_cv
 
 # This is the main script used to process data.
 # TODO: Call R package for storm event split.
@@ -40,6 +40,8 @@ if data_freq == 'H':
         storm_df, storm_limbs = EventDataComb(data_212042, event_comb, baseflow, Q_thr, data_freq)
         storm_df.index.name = 'id'
         storm_df.to_csv(dir_output + 'Q_above_' + str(Q_thr) + f'_{site}_StormEventRefilterData.csv')
+        cv_df = cal_cv(storm_df)
+        cv_df.to_csv(f'{dir_output}/CV_flow_tbdt.csv')
         hysteresis_data = ProcessHysteresis(event_comb, storm_limbs)
     hysteresis_data.to_csv(f'../output/CQ_analysis/{site}/' + 'HysteresisEventClean.csv')
 elif data_freq == 'D':
@@ -66,6 +68,7 @@ elif data_freq == 'D':
     # Combine events of time lag > 24 hours
     event_comb = EventSmooth(event_info[event_info['Event_filter_2'] == 1]) # Dataframe with peak > 2 m3/s
     event_comb.to_csv(dir_output + 'QAbove_' + str(Q_thr) + f'_{site}_StormEventClean.csv')
+
     # Save files
     for Q_thr in Q_thred_filter:
         storm_df = EventDataComb(data_212042, event_info, Q_thr, data_freq)

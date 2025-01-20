@@ -170,6 +170,48 @@ def ProcessHysteresis(event_info, storm_limbs):
         hysteresis_data.index.name = 'id'
     return hysteresis_data
 
+def cal_cv(storm_data):
+    """
+    Calculate the Coefficient of Variation for both flow and turbidity.
+    Parameters:
+    ============
+    storm_data: pd.DataFrame, containing columns of Datetime, Discharge, Turbidity.
+
+    Returns:
+    cv_dict: dict
+    """
+    stormID = storm_data.loc[:, 'stormID'].unique()
+    storm_data['limb_sep'] = None
+    for ii in stormID:
+        storm_ii = storm_data[storm_data['stormID'] == ii]
+        peak_date = storm_ii.loc[storm_ii['Discharge (ML/d)'].idxmax(), 'Datetime']
+        storm_data.loc[(storm_data['stormID'] == ii) & (storm_data['Datetime'] <= peak_date), 'limb_sep'] = 'rising'
+        storm_data.loc[(storm_data['stormID'] == ii) & (storm_data['Datetime'] > peak_date), 'limb_sep'] = 'falling'
+
+    # Calculate CV for both flow and turbidity at rising limb, falling limb and the whole process.
+    cv_dict = {'flow_rising':[], 'flow_falling': [], 'flow_total': [], 'tbdt_rising': [],
+               'tbdt_falling': [], 'tbdt_total': []}
+    for ii in stormID:
+        storm_ii = storm_data[storm_data['stormID'] == ii]
+        cv_dict['flow_rising'].append(storm_ii[storm_ii['limb_sep'] == 'rising'].loc[:, 'Discharge (ML/d)'].std()/ \
+            storm_ii[storm_ii['limb_sep'] == 'rising'].loc[:, 'Discharge (ML/d)'].mean())
+        cv_dict['flow_falling'].append(storm_ii[storm_ii['limb_sep'] == 'falling'].loc[:, 'Discharge (ML/d)'].std()/ \
+            storm_ii[storm_ii['limb_sep'] == 'falling'].loc[:, 'Discharge (ML/d)'].mean())
+        cv_dict['tbdt_rising'].append(storm_ii[storm_ii['limb_sep'] == 'rising'].loc[:, 'Turbidity (NTU)'].std() / \
+            storm_ii[storm_ii['limb_sep'] == 'rising'].loc[:, 'Turbidity (NTU)'].mean())
+        cv_dict['tbdt_falling'].append(storm_ii[storm_ii['limb_sep'] == 'falling'].loc[:, 'Turbidity (NTU)'].std() / \
+            storm_ii[storm_ii['limb_sep'] == 'falling'].loc[:, 'Turbidity (NTU)'].mean())
+        
+        cv_dict['flow_total'].append(storm_ii.loc[:, 'Discharge (ML/d)'].std() / storm_ii.loc[:, 'Discharge (ML/d)'].mean())
+        cv_dict['tbdt_total'].append(storm_ii.loc[:, 'Turbidity (NTU)'].std() / storm_ii.loc[:, 'Turbidity (NTU)'].mean())
+    cv = pd.DataFrame.from_dict(cv_dict)
+    cv['cvcq_rising'] = cv['tbdt_rising'] / cv['flow_rising']
+    cv['cvcq_falling'] = cv['tbdt_falling'] / cv['flow_falling']
+    cv['cvcq_total'] = cv['tbdt_total'] / cv['flow_total']
+    cv['stormID'] = stormID
+
+    return cv
+
 class CQModel:
     # Fit a C-Q model in power-law relationship
     # Step 1: Define a power-law function

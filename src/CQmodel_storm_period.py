@@ -4,7 +4,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import datetime
-from functions import CQModel
+from functions import CQModel, cal_cv
 import matplotlib.cm as cm
 from spotpy.objectivefunctions import nashsutcliffe, pbias, rrmse
 
@@ -16,16 +16,19 @@ def CQFitPlot(mod_type, train_period, fig_dir):
     end_postyear = pd.to_datetime('2021-07-01')
     start_preyear = pd.to_datetime('2016-07-01')
     storm_data = pd.read_csv(f'../output/CQ_analysis/{site}/' + \
-                            f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv', index_col='id') # '212058_NTU_Discharge_2016_2021.csv'
+                            f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv', index_col='id') 
     storm_data['Datetime'] = pd.to_datetime(storm_data['Datetime'], format='mixed', dayfirst=True)
+    # Separate rising and falling limb
     if train_period == 'Full': # If using the full dataset for training CQ model, set the end date as end_postfire.
         pre_time_tf = (storm_data['Datetime'] <= end_postyear) & (storm_data['Datetime'] >= start_preyear)
     else: # If using the prefire dataset for training CQ model, set the end date as start_postyear.
         pre_time_tf = (storm_data['Datetime'] < start_postyear) & (storm_data['Datetime'] >= start_preyear)
     post_time_tf = (storm_data['Datetime'] >= start_postyear) & (storm_data['Datetime'] < end_postyear)
     storm_data_pre = storm_data[pre_time_tf]
+    storm_data.loc[pre_time_tf, 'Time Period'] = 'Prefire'
     index_date_post = storm_data[storm_data['Datetime'] >= start_postyear].index[0]
     storm_data_post = storm_data[post_time_tf]
+    storm_data.loc[post_time_tf, 'Time Period'] = 'Postfire'
 
     cols = ['Discharge (cms)', 'Turbidity (NTU)']
     # Set CQModel class
@@ -76,29 +79,22 @@ def CQFitPlot(mod_type, train_period, fig_dir):
         storm_data.loc[storm_data[post_time_tf].index, f'Est_Tbdt_mix_{train_period}cal'] = \
             storm_data_post['Estimate_Turbidity'].values
     storm_data.to_csv(f'../output/CQ_analysis/{site}/' + \
-                    f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv') #'212058_NTU_Discharge_2016_2021.csv'
+                    f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv')
     # Calculate performance metrics
-    # Calculate the nse with only storm data
-    storm_data_sel = pd.read_csv(f'../output/CQ_analysis/{site}/' + \
-                                f'Q_above_{Q_thre}_{site}_StormEventRefilterData.csv', index_col='id')#
-    storm_data_sel['Datetime'] = pd.to_datetime(storm_data_sel['Datetime'], format='mixed', dayfirst=True)
-    filtered_df_pre = storm_data_pre.merge(storm_data_sel, on='Datetime')
-    # Filter the data according to datetime in storm_data_sel
-    # breakpoint()
-    nse['Prefire'] = np.round(nashsutcliffe(filtered_df_pre['Turbidity (NTU)_x'], \
-                                            filtered_df_pre['Estimate_Turbidity']), 3)
-    mec_rrmse['Prefire'] = np.round(rrmse(filtered_df_pre['Turbidity (NTU)_x'], \
-                                            filtered_df_pre['Estimate_Turbidity']), 3)
-    mec_pbias['Prefire'] = np.round(pbias(filtered_df_pre['Turbidity (NTU)_x'], \
-                                            filtered_df_pre['Estimate_Turbidity']), 3)
-    # nse['Postfire'] = np.round(nashsutcliffe(storm_data_post['Turbidity (NTU)'], storm_data_post['Estimate_Turbidity']), 3)
-    filtered_df_post = storm_data_post.merge(storm_data_sel, on='Datetime')
-    nse['Postfire'] = np.round(nashsutcliffe(filtered_df_post['Turbidity (NTU)_x'], \
-                                            filtered_df_post['Estimate_Turbidity']), 3)
-    mec_rrmse['Postfire'] = np.round(rrmse(filtered_df_post['Turbidity (NTU)_x'], \
-                                            filtered_df_post['Estimate_Turbidity']), 3)
-    mec_pbias['Postfire'] = np.round(pbias(filtered_df_post['Turbidity (NTU)_x'], \
-                                            filtered_df_post['Estimate_Turbidity']), 3)
+    # Calculate performance metrics for postfire 
+    nse['Prefire'] = np.round(nashsutcliffe(storm_data_pre['Turbidity (NTU)'], \
+                                            storm_data_pre['Estimate_Turbidity']), 3)
+    mec_rrmse['Prefire'] = np.round(rrmse(storm_data_pre['Turbidity (NTU)'], \
+                                            storm_data_pre['Estimate_Turbidity']), 3)
+    mec_pbias['Prefire'] = np.round(pbias(storm_data_pre['Turbidity (NTU)'], \
+                                            storm_data_pre['Estimate_Turbidity']), 3)
+    # Calculate performance metrics for postfire 
+    nse['Postfire'] = np.round(nashsutcliffe(storm_data_post['Turbidity (NTU)'], \
+                                            storm_data_post['Estimate_Turbidity']), 3)
+    mec_rrmse['Postfire'] = np.round(rrmse(storm_data_post['Turbidity (NTU)'], \
+                                            storm_data_post['Estimate_Turbidity']), 3)
+    mec_pbias['Postfire'] = np.round(pbias(storm_data_post['Turbidity (NTU)'], \
+                                            storm_data_post['Estimate_Turbidity']), 3)
 
     # Set fontsize used in plots
     lab_fs = 14
@@ -197,7 +193,7 @@ def CQFitPlot(mod_type, train_period, fig_dir):
 
 if __name__ == '__main__':
     site = 212058
-    fig_dir = f'../output/figs/{site}/CQ_LM/'
+    fig_dir = f'../output/figs/{site}/CQ_temp/'
     mod_types = ['power_law', 'mixed']
     train_periods = ['Pre', 'Post', 'Full']
     # Define the index for coeff with the first being CQ model coefficients and the remaining for NSE and log NSE
@@ -218,4 +214,4 @@ if __name__ == '__main__':
         coeff.loc[keys[8], train_periods[idx]] = res['rrmse']['Prefire']
         coeff.loc[keys[9], train_periods[idx]] = res['rrmse']['Postfire']
     coeff = coeff.astype(float)
-    coeff.to_csv(f'{fig_dir}CQModelCoeff_LM_storm_total.csv')
+    coeff.to_csv(f'{fig_dir}CQModelCoeff_LM_storm_rising.csv')
