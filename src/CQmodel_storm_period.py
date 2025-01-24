@@ -193,7 +193,7 @@ def CQFitPlot(mod_type, train_period, fig_dir):
 
 if __name__ == '__main__':
     site = 212058
-    fig_dir = f'../output/figs/{site}/CQ_temp/'
+    fig_dir = f'../output/figs/{site}/CQ_NSE/'
     mod_types = ['power_law', 'mixed']
     train_periods = ['Pre', 'Post', 'Full']
     # Define the index for coeff with the first being CQ model coefficients and the remaining for NSE and log NSE
