@@ -82,7 +82,7 @@ def EventSmooth(event_info):
     for i in range(1, len(event_info)):
         next_event = event_info.iloc[i]        
         # Check if the time difference between events is less than 24 hours
-        if (next_event['start'] - current_event['end']).total_seconds() / 3600 <= 24:
+        if (next_event['start'] - current_event['end']).total_seconds() / 3600 <= 36:
             # Combine events: take the earliest start and the latest end time
             current_event['end'] = max(current_event['end'], next_event['end'])
             current_event['q_peak'] = max(current_event['q_peak'], next_event['q_peak'])  # Assuming you want the max peakflow

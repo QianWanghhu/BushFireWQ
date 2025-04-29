@@ -6,7 +6,7 @@ from functions import EventDataComb, EventFilter, EventSmooth, ProcessHysteresis
 # This is the main script used to process data.
 # TODO: Call R package for storm event split.
 data_freq = 'H'
-site = 212058
+site = 212042
 # Re-filter events based on discharge threshold given.
 fn_storm_summary_212042 = f'{site}_NTU_StormEventSummaryData.csv'
 dir_output = f'../output/CQ_analysis/{site}/'
@@ -24,7 +24,7 @@ if data_freq == 'H':
     storm_info['end'] = pd.to_datetime(storm_info['end'], format = 'mixed', dayfirst=True)
     storm_info.index.name = 'id'
     # Re-filter events using data_212042 and storm_info
-    Q_thred_filter = [1]
+    Q_thred_filter = [0.6]
     for Q_thr in Q_thred_filter:
         event_info = EventFilter(data_212042, storm_info, Q_thr, 'Discharge (cms)', data_freq)
         event_info.to_csv(dir_output + fn_storm_summary_212042)

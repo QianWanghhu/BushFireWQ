@@ -10,8 +10,8 @@ from spotpy.objectivefunctions import nashsutcliffe, pbias, rrmse
 
 # Step 1: Read dataset and Process data
 def CQFitPlot(mod_type, train_period, fig_dir):
-    site = 212058
-    Q_thre = 1
+    site = 212042
+    Q_thre = 0.6
     start_postyear = pd.to_datetime('2020-01-01')
     end_postyear = pd.to_datetime('2021-07-01')
     start_preyear = pd.to_datetime('2016-07-01')
@@ -192,7 +192,7 @@ def CQFitPlot(mod_type, train_period, fig_dir):
     return {'result_fit':result_fit, 'nse': nse, 'rrmse':mec_rrmse, 'pbias':mec_pbias}
 
 if __name__ == '__main__':
-    site = 212058
+    site = 212042
     fig_dir = f'../output/figs/{site}/CQ_NSE/'
     mod_types = ['power_law', 'mixed']
     train_periods = ['Pre', 'Post', 'Full']
