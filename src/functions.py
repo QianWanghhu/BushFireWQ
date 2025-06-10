@@ -280,7 +280,6 @@ class CQModel:
         q_total, q_quick, q_base = flow[0, :], flow[1, :], flow[2, :]
         assert flow.shape[0] == 3, 'Flow should contain total storm flow, base, and quick flow.'   
         c_quick = np.power((aq + bq * (q_total ** 1/n)), n) * q_total / q_total
-        # c_base = np.power((ab + bb * (q_total**1/n)), n) * q_total / q_total
         conc = c_quick
         return conc
 
